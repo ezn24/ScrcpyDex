@@ -72,7 +72,8 @@ namespace ScrcpyDex
                 string actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(jar)));
                 var keyboardArgs = ScrcpyExecutionService.BuildArgumentsList(new ScrcpyDeXSettings())
                     .FindAll(arg => arg.StartsWith("--keyboard=", StringComparison.Ordinal));
-                return expected == actual && keyboardArgs.Count == 1 && keyboardArgs[0] == "--keyboard=uhid" ? 0 : 1;
+                return expected == actual && keyboardArgs.Count == 1 && keyboardArgs[0] == "--keyboard=uhid" &&
+                    new ScrcpyDeXSettings().Device.ActivationMode == "hdmi" ? 0 : 1;
             }
             catch
             {

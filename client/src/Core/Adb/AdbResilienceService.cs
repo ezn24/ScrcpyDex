@@ -216,6 +216,7 @@ namespace ScrcpyDex.Core.Adb
             try
             {
                 await process.WaitForExitAsync(ct).ConfigureAwait(false);
+                await stream.DrainAsync(ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {

@@ -21,7 +21,9 @@ jobs:
       - name: Publish original v1.1 interface with embedded server
         shell: pwsh
         run: |
-          dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.2 -p:AssemblyVersion=1.1.2.0 -p:FileVersion=1.1.2.0 -o publish/single-exe --nologo
+          dotnet run --project tests/HdmiSession.Tests/HdmiSession.Tests.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.3 -p:AssemblyVersion=1.1.3.0 -p:FileVersion=1.1.3.0 -o publish/single-exe --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify EXE without companion files
         shell: pwsh
@@ -53,20 +55,22 @@ jobs:
           path: release-assets
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.2
+          tag_name: v1.1.3
           target_commitish: ${{ github.sha }}
-          name: v1.1.2 - Single EXE physical keyboard fix
+          name: v1.1.3 - HDMI activation for third-party input methods
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
           body: |
             Uses the original upstream v1.1 release interface and its embedded server implementation.
-            Adds --keyboard=uhid so Android can register a physical keyboard.
+            Defaults to simulated HDMI activation, matching the display activation method used by DX-Manager, while retaining UHID physical keyboard input.
 
             Download ScrcpyDeX.exe directly. No companion JAR or ZIP extraction is needed.
             Official scrcpy and ADB must still be installed, as with upstream.
-            The build checks embedded server extraction and UHID arguments from an isolated EXE.
-            Phone-side recognition requires physical device verification.
+            The build tests display selection, ownership, rollback, cancellation, and cleanup, then verifies the isolated EXE and embedded server.
+            Gboard/SwiftKey compatibility depends on the phone firmware and still needs physical device verification.
+            Stop DX-Manager or other simulated-display owners before starting this version.
+            The previous activation method remains available via device.activationMode=wireless in the settings file.
           files: |
             release-assets/ScrcpyDeX.exe
             release-assets/SHA256SUMS.txt

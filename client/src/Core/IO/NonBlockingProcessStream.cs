@@ -83,6 +83,11 @@ namespace ScrcpyDex.Core.IO
             }
         }
 
+        public Task DrainAsync(CancellationToken ct = default)
+        {
+            return Task.WhenAll(_stdoutTask ?? Task.CompletedTask, _stderrTask ?? Task.CompletedTask).WaitAsync(ct);
+        }
+
         public async ValueTask DisposeAsync()
         {
             if (_disposed) return;

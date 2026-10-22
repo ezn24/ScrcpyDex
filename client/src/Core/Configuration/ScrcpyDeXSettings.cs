@@ -200,6 +200,11 @@ namespace ScrcpyDex.Core.Configuration
 
     public sealed class DeviceSection : ObservableObject
     {
+        private string _activationMode = "hdmi";
+
+        [JsonPropertyName("activationMode")]
+        public string ActivationMode { get => _activationMode; set => SetProperty(ref _activationMode, value); }
+
         private bool _turnScreenOff = false;
         private bool _stayAwake = false;
         private bool _autoConnect = false;

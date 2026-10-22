@@ -121,7 +121,7 @@ namespace ScrcpyDex.ViewModels
 
         public bool IsStreaming => CurrentState == SessionState.StreamingActive;
 
-        public bool CanStart => IsScrcpyInstalled && CurrentState == SessionState.Idle && CurrentDevice != null && CurrentDevice.IsConnected;
+        public bool CanStart => !_isDisposed && IsScrcpyInstalled && CurrentState == SessionState.Idle && CurrentDevice != null && CurrentDevice.IsConnected;
 
         public bool CanStop => CurrentState != SessionState.Idle && CurrentState != SessionState.Error;
 
@@ -618,10 +618,10 @@ namespace ScrcpyDex.ViewModels
                 if (_adbService != null)
                 {
                     _adbService.ResetResilienceState();
-                    StatusMessage = "Deploying scrcpydex-server.jar and activating DeX...";
+                    StatusMessage = $"Activating DeX ({Settings.Device.ActivationMode})...";
                     await _stateMachine.FireAsync(SessionTrigger.DeviceReady, "Device authorized");
 
-                    dexDisplayId = await _adbService.DeployAndActivateDeXAsync(CurrentDevice.Serial);
+                    dexDisplayId = await _adbService.ActivateDeXAsync(CurrentDevice.Serial, Settings);
                     if (!dexDisplayId.HasValue)
                     {
                         Log("Display ID not returned by activator stdout, probing dumpsys display...", "WARN");
@@ -638,7 +638,7 @@ namespace ScrcpyDex.ViewModels
                         Log("Could not detect Samsung DeX virtual display, falling back to scrcpy autodetection.", "WARN");
                     }
 
-                    await _stateMachine.FireAsync(SessionTrigger.ServerDeployed, "Server deployed");
+                    await _stateMachine.FireAsync(SessionTrigger.ServerDeployed, "DeX display ready");
                 }
 
                 StatusMessage = "Starting scrcpy streaming session...";
@@ -665,6 +665,12 @@ namespace ScrcpyDex.ViewModels
             catch (Exception ex)
             {
                 Log($"Error starting DeX session: {ex.Message}", "ERR");
+                try
+                {
+                    if (_executionService != null) await _executionService.StopAsync();
+                    if (_adbService != null) await _adbService.StopDeXSessionAsync(CurrentDevice?.Serial);
+                }
+                catch (Exception cleanupError) { Log($"Session cleanup failed: {cleanupError.Message}", "ERR"); }
                 StatusMessage = $"Connection failed: {ex.Message}";
                 await _stateMachine.EmergencyHaltAsync(ex.Message);
                 await _stateMachine.FireAsync(SessionTrigger.Reset);
@@ -957,16 +963,33 @@ namespace ScrcpyDex.ViewModels
             }
         }
 
-        public async void Dispose()
+        public async Task ShutdownAsync()
         {
             if (_isDisposed) return;
             _isDisposed = true;
+            StartDeXCommand.NotifyCanExecuteChanged();
 
             try { await _deviceTracker.DisposeAsync(); } catch { }
             if (_executionService != null)
             {
                 try { await _executionService.DisposeAsync(); } catch { }
             }
+            try
+            {
+                if (_adbService != null) await _adbService.StopDeXSessionAsync(CurrentDevice?.Serial);
+            }
+            catch
+            {
+                _isDisposed = false;
+                StartDeXCommand.NotifyCanExecuteChanged();
+                throw;
+            }
+        }
+
+        public async void Dispose()
+        {
+            try { await ShutdownAsync(); }
+            catch (Exception error) { Log($"Display cleanup failed: {error.Message}", "ERR"); }
         }
 
         #endregion

@@ -50,7 +50,7 @@ namespace ScrcpyDex.WinUI.Views
             InitializeComponent();
 
             Loaded += OnMainWindowLoaded;
-            Closed += OnMainWindowClosed;
+            Closing += OnMainWindowClosing;
         }
 
         private void OnMainWindowLoaded(object sender, RoutedEventArgs e)
@@ -159,9 +159,28 @@ namespace ScrcpyDex.WinUI.Views
             LogsRichTextBox.ScrollToEnd();
         }
 
-        private void OnMainWindowClosed(object? sender, EventArgs e)
+        private bool _shutdownComplete;
+        private bool _shutdownStarted;
+
+        private async void OnMainWindowClosing(object? sender, CancelEventArgs e)
         {
-            ViewModel.Dispose();
+            if (_shutdownComplete) return;
+            e.Cancel = true;
+            if (_shutdownStarted) return;
+            _shutdownStarted = true;
+            try
+            {
+                // Finish this Closing event before a synchronous shutdown can call Close again.
+                await System.Threading.Tasks.Task.Yield();
+                await ViewModel.ShutdownAsync();
+                _shutdownComplete = true;
+                Close();
+            }
+            catch (Exception error)
+            {
+                ViewModel.Log($"Display cleanup failed: {error.Message}", "ERR");
+                _shutdownStarted = false;
+            }
         }
     }
 }

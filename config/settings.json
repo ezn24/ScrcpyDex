@@ -16,6 +16,7 @@
     "releaseKey": "LeftAlt"
   },
   "device": {
+    "activationMode": "hdmi",
     "turnScreenOff": false,
     "stayAwake": false,
     "autoConnect": false

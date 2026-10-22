@@ -39,6 +39,7 @@
     "device": {
       "type": "object",
       "properties": {
+        "activationMode": { "type": "string", "enum": ["hdmi", "wireless"], "default": "hdmi" },
         "turnScreenOff": { "type": "boolean" },
         "stayAwake": { "type": "boolean" },
         "autoConnect": { "type": "boolean" }

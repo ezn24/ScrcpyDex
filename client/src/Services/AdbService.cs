@@ -21,6 +21,7 @@ using System.Threading.Tasks;
 using ScrcpyDex.Core.Adb;
 using ScrcpyDex.Core.IO;
 using ScrcpyDex.Core.Lifecycle;
+using ScrcpyDex.Core.Configuration;
 using ScrcpyDex.Models;
 
 namespace ScrcpyDex.Services
@@ -33,6 +34,7 @@ namespace ScrcpyDex.Services
         Task<int?> FindDeXDisplayIdAsync(string serial, CancellationToken ct = default);
         Task<int?> WaitForDeXDisplayIdAsync(string serial, TimeSpan timeout, CancellationToken ct = default);
         Task<int?> DeployAndActivateDeXAsync(string serial, string? serverJarPath = null, CancellationToken ct = default);
+        Task<int?> ActivateDeXAsync(string serial, ScrcpyDeXSettings settings, CancellationToken ct = default);
         Task StopDeXSessionAsync(string? serial = null, CancellationToken ct = default);
         Task<AdbExecutionResult> RunCommandAsync(string arguments, CancellationToken ct = default);
         void ResetResilienceState();
@@ -48,6 +50,8 @@ namespace ScrcpyDex.Services
         private readonly AdbResilienceService _resilience;
         private Process? _activatorProcess;
         private NonBlockingProcessStream? _activatorStream;
+        private readonly HdmiDisplaySession _hdmiSession;
+        private string? _wirelessSessionSerial;
 
         private static readonly Lazy<AdbService> _defaultInstance = new Lazy<AdbService>(() => new AdbService());
         public static AdbService Instance => _defaultInstance.Value;
@@ -64,6 +68,12 @@ namespace ScrcpyDex.Services
                 : ScrcpyPathResolver.ResolveAdbExecutable();
 
             _resilience = new AdbResilienceService(_adbPath, _jobTracker);
+            _hdmiSession = new HdmiDisplaySession(async (arguments, ct) =>
+            {
+                var result = await _resilience.ExecuteDirectAsync(arguments, TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+                if (!result.Succeeded) throw new InvalidOperationException($"ADB display operation failed: {result.Error}");
+                return result.Output;
+            });
         }
 
         #region Device Detection & Properties
@@ -317,6 +327,21 @@ namespace ScrcpyDex.Services
         /// Pushes scrcpydex-server.jar to the device, cleans previous sessions, launches activator,
         /// keeps the activator daemon alive, and returns the acquired DeX display ID.
         /// </summary>
+        public async Task<int?> ActivateDeXAsync(string serial, ScrcpyDeXSettings settings, CancellationToken ct = default)
+        {
+            if (string.Equals(settings.Device.ActivationMode, "wireless", StringComparison.OrdinalIgnoreCase))
+                return await DeployAndActivateDeXAsync(serial, ct: ct).ConfigureAwait(false);
+            if (!string.Equals(settings.Device.ActivationMode, "hdmi", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("device.activationMode must be hdmi or wireless.");
+
+            string setting = HdmiDisplaySession.BuildSetting(settings.Display.Resolution,
+                settings.Display.Width, settings.Display.Height, settings.Display.Dpi);
+            ResetResilienceState();
+            await StopDeXSessionAsync(serial, ct).ConfigureAwait(false);
+            ResetResilienceState();
+            return await _hdmiSession.StartAsync(serial, setting, ct).ConfigureAwait(false);
+        }
+
         public async Task<int?> DeployAndActivateDeXAsync(string serial, string? serverJarPath = null, CancellationToken ct = default)
         {
             string? jar = serverJarPath ?? ScrcpyPathResolver.ResolveServerJar();
@@ -333,6 +358,7 @@ namespace ScrcpyDex.Services
             ResetResilienceState();
 
             // 2. Push server jar to /data/local/tmp/scrcpydex-server.jar
+            _wirelessSessionSerial = serial;
             var pushResult = await _resilience.ExecuteWithRetryAsync(
                 $"-s {serial} push \"{jar}\" /data/local/tmp/scrcpydex-server.jar",
                 maxRetries: 2,
@@ -410,6 +436,15 @@ namespace ScrcpyDex.Services
         /// </summary>
         public async Task StopDeXSessionAsync(string? serial = null, CancellationToken ct = default)
         {
+            if (_hdmiSession.HasSession || _hdmiSession.IsStarting)
+            {
+                await _hdmiSession.StopAsync(ct).ConfigureAwait(false);
+                return;
+            }
+
+            if (_wirelessSessionSerial == null && _activatorProcess == null) return;
+            serial = _wirelessSessionSerial ?? serial;
+
             string target = string.IsNullOrWhiteSpace(serial) ? string.Empty : $"-s {serial} ";
 
             // Terminate host-side activator process
@@ -456,6 +491,7 @@ namespace ScrcpyDex.Services
             // Step 3: Remove port forwards asynchronously without blocking
             _ = _resilience.ExecuteDirectAsync($"{target}forward --remove tcp:27183", TimeSpan.FromMilliseconds(500), ct);
             _ = _resilience.ExecuteDirectAsync($"{target}forward --remove tcp:27184", TimeSpan.FromMilliseconds(500), ct);
+            _wirelessSessionSerial = null;
         }
 
         #endregion
