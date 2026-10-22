@@ -28,6 +28,7 @@ namespace ScrcpyDex.Services
 {
     public interface IAdbService
     {
+        event EventHandler<string>? DiagnosticReceived;
         Task<DeviceInfo> DetectDeviceAsync(CancellationToken ct = default);
         Task<IReadOnlyList<DeviceInfo>> GetConnectedDevicesAsync(CancellationToken ct = default);
         Task<DeviceInfo> QueryDeviceInfoAsync(string serial, CancellationToken ct = default);
@@ -57,6 +58,7 @@ namespace ScrcpyDex.Services
         public static AdbService Instance => _defaultInstance.Value;
 
         public string AdbPath => _adbPath;
+        public event EventHandler<string>? DiagnosticReceived;
 
         public void ResetResilienceState() => _resilience.ResetCircuitBreaker();
 
@@ -74,6 +76,7 @@ namespace ScrcpyDex.Services
                 if (!result.Succeeded) throw new InvalidOperationException($"ADB display operation failed: {result.Error}");
                 return result.Output;
             });
+            _hdmiSession.Diagnostic += message => DiagnosticReceived?.Invoke(this, message);
         }
 
         #region Device Detection & Properties
@@ -339,7 +342,9 @@ namespace ScrcpyDex.Services
             ResetResilienceState();
             await StopDeXSessionAsync(serial, ct).ConfigureAwait(false);
             ResetResilienceState();
-            return await _hdmiSession.StartAsync(serial, setting, ct).ConfigureAwait(false);
+            string scrcpyPath = ScrcpyPathResolver.ResolveScrcpyExecutable(settings.Paths.ScrcpyPath);
+            return await _hdmiSession.StartAsync(serial, setting, ct,
+                listDisplays: token => ScrcpyDisplayProbe.ListAsync(scrcpyPath, _adbPath, serial, token)).ConfigureAwait(false);
         }
 
         public async Task<int?> DeployAndActivateDeXAsync(string serial, string? serverJarPath = null, CancellationToken ct = default)

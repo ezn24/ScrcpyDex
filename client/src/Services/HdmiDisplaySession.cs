@@ -19,6 +19,7 @@ namespace ScrcpyDex.Services
 
         public bool HasSession => _serial != null;
         public bool IsStarting => Volatile.Read(ref _starting) != 0;
+        public event Action<string>? Diagnostic;
 
         public HdmiDisplaySession(Func<string, CancellationToken, Task<string>> execute)
         {
@@ -46,7 +47,7 @@ namespace ScrcpyDex.Services
         private static bool IsEmpty(string value) => string.IsNullOrWhiteSpace(value) || value == "null" || value == "none";
 
         public async Task<int> StartAsync(string serial, string setting, CancellationToken ct = default,
-            TimeSpan? detectionTimeout = null)
+            TimeSpan? detectionTimeout = null, Func<CancellationToken, Task<string>>? listDisplays = null)
         {
             var size = Regex.Match(setting, @"\A(\d+)x(\d+)/(\d+),hdmi\z");
             if (!size.Success || BuildSetting(null, int.Parse(size.Groups[1].Value), int.Parse(size.Groups[2].Value),
@@ -62,7 +63,11 @@ namespace ScrcpyDex.Services
                 if (!IsEmpty(current))
                     throw new InvalidOperationException("A simulated display already exists. Stop its owner or select None under Developer options > Simulate secondary displays before starting DeX.");
 
-                var before = ParseDisplays(await Shell(serial, "dumpsys display", ct).ConfigureAwait(false)).Keys.ToHashSet();
+                var beforeSnapshot = await ReadDisplaysAsync(serial, listDisplays, ct).ConfigureAwait(false);
+                if (beforeSnapshot.Count == 0)
+                    throw new InvalidOperationException("Display enumeration returned no display IDs. No simulated display was created.");
+                var before = beforeSnapshot.Keys.ToHashSet();
+                Diagnostic?.Invoke($"HDMI requested {setting}; before: {Describe(beforeSnapshot)}");
                 // Record ownership before mutation: even a canceled ADB request may have reached Android.
                 _serial = serial;
                 _setting = setting;
@@ -70,15 +75,20 @@ namespace ScrcpyDex.Services
                 {
                     await Shell(serial, $"settings put global overlay_display_devices {setting}", ct).ConfigureAwait(false);
                     var timer = Stopwatch.StartNew();
+                    var lastSnapshot = beforeSnapshot;
                     while (timer.Elapsed < (detectionTimeout ?? TimeSpan.FromSeconds(10)))
                     {
                         ct.ThrowIfCancellationRequested();
-                        string dump = await Shell(serial, "dumpsys display", ct).ConfigureAwait(false);
-                        int? id = FindCreatedDisplay(before, dump, int.Parse(size.Groups[1].Value), int.Parse(size.Groups[2].Value));
-                        if (id.HasValue) return id.Value;
+                        lastSnapshot = await ReadDisplaysAsync(serial, listDisplays, ct).ConfigureAwait(false);
+                        int? id = FindCreatedDisplay(before, lastSnapshot, int.Parse(size.Groups[1].Value), int.Parse(size.Groups[2].Value));
+                        if (id.HasValue)
+                        {
+                            Diagnostic?.Invoke($"HDMI display selected: {id.Value}; after: {Describe(lastSnapshot)}");
+                            return id.Value;
+                        }
                         await Task.Delay(200, ct).ConfigureAwait(false);
                     }
-                    throw new TimeoutException("The simulated HDMI display was not detected. This firmware may not support HDMI simulation; device.activationMode can be set to wireless for the previous method.");
+                    throw new TimeoutException($"HDMI display ID detection timed out. Requested {setting}; before: {Describe(beforeSnapshot)}; after: {Describe(lastSnapshot)}. The display may exist even though its ID or dimensions did not match.");
                 }
                 catch (Exception startError)
                 {
@@ -113,6 +123,7 @@ namespace ScrcpyDex.Services
                 await Shell(_serial, "settings delete global overlay_display_devices", ct).ConfigureAwait(false);
                 string remaining = (await Shell(_serial, "settings get global overlay_display_devices", ct).ConfigureAwait(false)).Trim();
                 if (!IsEmpty(remaining)) throw new InvalidOperationException("The simulated HDMI display could not be removed. Retry Stop or select None under Developer options > Simulate secondary displays.");
+                Diagnostic?.Invoke("HDMI simulated display setting removed.");
             }
             _serial = null;
             _setting = null;
@@ -123,20 +134,64 @@ namespace ScrcpyDex.Services
             var displays = new Dictionary<int, string>();
             var blocks = Regex.Matches(dump, @"(?ms)^\s*mDisplayId\s*=\s*(\d+)[^\r\n]*.*?(?=^\s*mDisplayId\s*=|\z)");
             foreach (Match block in blocks) displays[int.Parse(block.Groups[1].Value)] = block.Value;
-            if (displays.Count == 0)
+            // Samsung dumps can mix logical blocks with independent DisplayInfo lines.
+            // Always merge explicit IDs, even if a primary-display block was already found.
+            foreach (string line in dump.Split('\n'))
             {
-                foreach (string line in dump.Split('\n'))
-                {
-                    var id = Regex.Match(line, @"DisplayInfo\{.*?\bdisplayId\s+(\d+)");
-                    if (id.Success) displays[int.Parse(id.Groups[1].Value)] = line;
-                }
+                var id = Regex.Match(line, @"DisplayInfo\{.*?\bdisplayId\s+(\d+)");
+                if (id.Success) displays[int.Parse(id.Groups[1].Value)] = line;
             }
             return displays;
         }
 
+        private async Task<Dictionary<int, string>> ReadDisplaysAsync(string serial,
+            Func<CancellationToken, Task<string>>? listDisplays, CancellationToken ct)
+        {
+            var snapshot = ParseDisplays(await Shell(serial, "dumpsys display", ct).ConfigureAwait(false));
+            if (listDisplays != null)
+            {
+                try
+                {
+                    using var probeTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    probeTimeout.CancelAfter(TimeSpan.FromSeconds(4));
+                    foreach (var display in ParseScrcpyDisplays(await listDisplays(probeTimeout.Token).ConfigureAwait(false)))
+                        snapshot[display.Key] = display.Value;
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception error)
+                {
+                    Diagnostic?.Invoke($"scrcpy display listing unavailable ({error.GetType().Name}); using Android display data.");
+                }
+            }
+            return snapshot;
+        }
+
+        public static Dictionary<int, string> ParseScrcpyDisplays(string output)
+        {
+            var snapshot = new Dictionary<int, string>();
+            foreach (Match display in Regex.Matches(output, @"--display-id[=\s]+(\d+)\s+\((\d+)\s*[xX]\s*(\d+)\)"))
+                snapshot[int.Parse(display.Groups[1].Value)] = $"{display.Groups[2].Value}x{display.Groups[3].Value}";
+            return snapshot;
+        }
+
+        private static string Describe(Dictionary<int, string> snapshot)
+        {
+            return string.Join("; ", snapshot.OrderBy(x => x.Key).Select(display =>
+            {
+                var sizes = Regex.Matches(display.Value, @"\b\d{3,5}\s*[xX]\s*\d{3,5}\b")
+                    .Select(match => Regex.Replace(match.Value, @"\s+", "")).Distinct();
+                return $"id={display.Key} sizes=[{string.Join(",", sizes)}]";
+            }));
+        }
+
         public static int? FindCreatedDisplay(ISet<int> before, string dump, int width, int height)
         {
-            var matches = ParseDisplays(dump).Where(display => display.Key > 0 && !before.Contains(display.Key) &&
+            return FindCreatedDisplay(before, ParseDisplays(dump), width, height);
+        }
+
+        private static int? FindCreatedDisplay(ISet<int> before, Dictionary<int, string> snapshot, int width, int height)
+        {
+            var matches = snapshot.Where(display => display.Key > 0 && !before.Contains(display.Key) &&
                 Regex.IsMatch(display.Value, $@"\b{width}\s*x\s*{height}\b", RegexOptions.IgnoreCase)).Select(display => display.Key).ToList();
             if (matches.Count > 1) throw new InvalidOperationException("More than one matching display appeared; refusing to select an unrelated display.");
             return matches.Count == 1 ? matches[0] : null;

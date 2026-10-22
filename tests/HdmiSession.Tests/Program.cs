@@ -18,6 +18,10 @@ var before = new HashSet<int> { 0, 4 };
 string logical = "  mDisplayId=0\n    mName=Built-in, 1920 x 1080\n  mDisplayId=4\n    mName=Existing, 1920 x 1080\n  mDisplayId=7\n    mName=Overlay #1, 1920 x 1080\n";
 Check(HdmiDisplaySession.FindCreatedDisplay(before, logical, 1920, 1080) == 7, "Select only the newly created matching logical display.");
 Check(HdmiDisplaySession.FindCreatedDisplay(before, "DisplayInfo{\"Overlay #1\", displayId 8, real 1920 x 1080}", 1920, 1080) == 8, "Support DisplayInfo-only dumps.");
+string mixed = "mDisplayId=0\n1080 x 2340\nOther display data:\n  mBaseDisplayInfo=DisplayInfo{\"Overlay #1\", displayId 8, real 1920 x 1080}\n";
+Check(HdmiDisplaySession.FindCreatedDisplay(before, mixed, 1920, 1080) == 8, "Do not discard independent Samsung DisplayInfo records when a primary logical block exists.");
+var listed = HdmiDisplaySession.ParseScrcpyDisplays("[server] INFO: List of displays:\r\n    --display-id=0    (1080x2340)\r\n    --display-id=8    (1920x1080)\r\n");
+Check(listed.Count == 2 && listed[8] == "1920x1080", "Read scrcpy's display IDs and compact dimensions.");
 Check(HdmiDisplaySession.FindCreatedDisplay(before, "mDisplayId=0\n1920 x 1080", 1920, 1080) == null, "Never select the phone display.");
 await Throws<InvalidOperationException>(() => Task.FromResult(HdmiDisplaySession.FindCreatedDisplay(before, logical + "mDisplayId=8\n1920 x 1080", 1920, 1080)));
 
@@ -28,6 +32,25 @@ Check(session.HasSession && fake.Setting == "1920x1080/320,hdmi", "Retain owners
 await session.StopAsync();
 Check(!session.HasSession && fake.Setting == "null", "Stop must remove the owned display.");
 Check(fake.Commands.All(x => x.StartsWith("-s TEST_DEVICE shell ")), "Every operation must target the captured device.");
+
+fake = new FakeDevice { ShowDisplay = false };
+session = new HdmiDisplaySession(fake.Execute);
+var diagnostics = new List<string>();
+session.Diagnostic += diagnostics.Add;
+Check(await session.StartAsync("TEST_DEVICE", "1920x1080/320,hdmi", listDisplays: ct =>
+    Task.FromResult("--display-id=0 (1080x2340)\n--display-id=6 (1920x1080)\n" +
+        (fake.Setting != "null" ? "--display-id=8 (1920x1080)" : ""))) == 8,
+    "Use scrcpy's newly created display and exclude IDs that only its pre-start listing exposed.");
+Check(diagnostics.Any(x => x.Contains("before:") && x.Contains("id=6")) &&
+    diagnostics.Any(x => x.Contains("selected: 8")), "Log numeric display summaries for troubleshooting without raw device identifiers.");
+await session.StopAsync();
+
+fake = new FakeDevice();
+session = new HdmiDisplaySession(fake.Execute);
+Check(await session.StartAsync("TEST_DEVICE", "1920x1080/320,hdmi", listDisplays: ct =>
+    Task.FromException<string>(new IOException("Synthetic listing failure."))) == 7,
+    "Retain Android enumeration when scrcpy listing is unavailable.");
+await session.StopAsync();
 
 fake = new FakeDevice { Setting = "1280x720/160,hdmi" };
 session = new HdmiDisplaySession(fake.Execute);

@@ -291,6 +291,7 @@ namespace ScrcpyDex.ViewModels
             DiagnosticLogs = new BoundedRingBuffer<string>(1000, Application.Current?.Dispatcher);
             FilteredLogs = CollectionViewSource.GetDefaultView(DiagnosticLogs);
             FilteredLogs.Filter = FilterLogItem;
+            _adbService.DiagnosticReceived += OnAdbDiagnosticReceived;
 
             // Subscribe to State Machine transitions
             _stateMachine.StateChanged += OnStateMachineStateChanged;
@@ -963,6 +964,8 @@ namespace ScrcpyDex.ViewModels
             }
         }
 
+        private void OnAdbDiagnosticReceived(object? sender, string message) => Log(message);
+
         public async Task ShutdownAsync()
         {
             if (_isDisposed) return;
@@ -977,6 +980,7 @@ namespace ScrcpyDex.ViewModels
             try
             {
                 if (_adbService != null) await _adbService.StopDeXSessionAsync(CurrentDevice?.Serial);
+                if (_adbService != null) _adbService.DiagnosticReceived -= OnAdbDiagnosticReceived;
             }
             catch
             {

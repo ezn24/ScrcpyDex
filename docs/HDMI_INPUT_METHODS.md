@@ -25,6 +25,19 @@ The GUI's selected resolution and existing DPI preference determine the
 simulated display. Firmware support is required; DX-Manager documents its
 virtual display method primarily against One UI 8.x.
 
+Android can show this simulated display as a floating preview on the phone. That
+window can appear before the PC starts streaming, and its presence does not
+prove that scrcpy has attached successfully. If activation fails, the application
+removes its setting; Android dismisses the preview asynchronously. If it remains,
+use the recovery instructions below.
+
+Display detection merges Android's logical display blocks with independent
+`DisplayInfo` records. It also runs the configured scrcpy executable with
+`--list-displays`, using the same device selector and ADB executable. Baseline
+IDs from either source are excluded when choosing a newly created display.
+Failure diagnostics include the requested size and numeric before/after display
+summaries. A timeout does not by itself mean the firmware lacks HDMI support.
+
 The legacy PowerShell launcher still uses the previous Wireless DeX backend.
 Use the released EXE for the new HDMI behavior.
 
