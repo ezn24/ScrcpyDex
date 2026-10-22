@@ -23,7 +23,7 @@ jobs:
         run: |
           dotnet run --project tests/HdmiSession.Tests/HdmiSession.Tests.csproj -c Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.4 -p:AssemblyVersion=1.1.4.0 -p:FileVersion=1.1.4.0 -o publish/single-exe --nologo
+          dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.5 -p:AssemblyVersion=1.1.5.0 -p:FileVersion=1.1.5.0 -o publish/single-exe --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify EXE without companion files
         shell: pwsh
@@ -55,9 +55,9 @@ jobs:
           path: release-assets
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.4
+          tag_name: v1.1.5
           target_commitish: ${{ github.sha }}
-          name: v1.1.4 - HDMI display detection fix
+          name: v1.1.5 - Adjustable DeX DPI
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
@@ -65,6 +65,7 @@ jobs:
             Uses the original upstream v1.1 release interface and its embedded server implementation.
             Defaults to simulated HDMI activation, matching the display activation method used by DX-Manager, while retaining UHID physical keyboard input.
             Fixes mixed Android display-dump parsing and cross-checks IDs with scrcpy --list-displays.
+            Adds a Display DPI slider (120–640) to the existing Display settings page, with numeric feedback and automatic saving. Stop and restart DeX to apply the selected density.
             Logs requested dimensions and before/after display summaries instead of attributing every detection timeout to unsupported firmware.
 
             Download ScrcpyDeX.exe directly. No companion JAR or ZIP extraction is needed.

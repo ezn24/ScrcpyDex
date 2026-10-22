@@ -2,6 +2,7 @@
   "version": "1.1",
   "display": {
     "resolution": "1920x1080",
+    "dpi": 320,
     "fps": 60,
     "bitrate": 8000000,
     "codec": "h264",

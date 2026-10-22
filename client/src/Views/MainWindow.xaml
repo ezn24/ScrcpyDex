@@ -251,6 +251,25 @@
                             <ComboBox Width="180" ItemsSource="{Binding Resolutions}" SelectedItem="{Binding Settings.Display.Resolution}" />
                         </ui:CardControl>
 
+                        <!-- Display Density Card -->
+                        <ui:CardControl Margin="0,0,0,8">
+                            <ui:CardControl.Header>
+                                <StackPanel Margin="0,2">
+                                    <TextBlock Text="Display DPI" FontWeight="SemiBold" FontSize="13.5" />
+                                    <TextBlock Text="Higher DPI makes text and controls larger. Restart DeX to apply."
+                                               Foreground="#9E9E9E" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap" MaxWidth="510" />
+                                </StackPanel>
+                            </ui:CardControl.Header>
+                            <StackPanel Width="180">
+                                <TextBlock Text="{Binding Settings.Display.Dpi, StringFormat={}{0} DPI}"
+                                           HorizontalAlignment="Right" Margin="0,0,0,4" />
+                                <Slider Minimum="120" Maximum="640" TickFrequency="1" IsSnapToTickEnabled="True"
+                                        SmallChange="1" LargeChange="20" AutomationProperties.Name="Display DPI"
+                                        Value="{Binding Settings.Display.Dpi, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        ToolTip="120–640 DPI. Use the arrow keys for one-DPI adjustments." />
+                            </StackPanel>
+                        </ui:CardControl>
+
                         <!-- Refresh Rate (FPS) Card -->
                         <ui:CardControl Margin="0,0,0,8">
                             <ui:CardControl.Header>

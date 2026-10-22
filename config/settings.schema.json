@@ -11,7 +11,7 @@
         "resolution": { "type": "string", "enum": ["1920x1080", "2560x1440", "3840x2160", "native"] },
         "width": { "type": "integer", "minimum": 640 },
         "height": { "type": "integer", "minimum": 480 },
-        "dpi": { "type": "integer", "minimum": 120, "maximum": 480 },
+        "dpi": { "type": "integer", "minimum": 120, "maximum": 640 },
         "fps": { "type": "integer", "enum": [30, 60, 90, 120] },
         "bitrate": { "type": "integer", "minimum": 2000000, "maximum": 50000000 },
         "codec": { "type": "string", "enum": ["h264", "h265"] },

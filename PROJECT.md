@@ -29,7 +29,7 @@ cleanup, compatibility, and physical testing.
 Install the .NET 8 SDK, then run from the repository root:
 
 ```powershell
-dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.4 -p:AssemblyVersion=1.1.4.0 -p:FileVersion=1.1.4.0 -o publish/single-exe
+dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.5 -p:AssemblyVersion=1.1.5.0 -p:FileVersion=1.1.5.0 -o publish/single-exe
 ```
 
 The distributable is `publish/single-exe/ScrcpyDeX.exe`; it embeds the server JAR.
@@ -40,7 +40,7 @@ No companion JAR, assets directory, or configuration template is needed.
 The existing `.github/workflows/ci.yml` builds the single EXE, copies only that
 file to an isolated directory, and runs `--verify-bundle`. This checks the embedded
 JAR against the resolved file and verifies the UHID keyboard argument without
-opening the interface or contacting a phone. A passing build publishes `v1.1.4`
+opening the interface or contacting a phone. A passing build publishes `v1.1.5`
 with `ScrcpyDeX.exe` and `SHA256SUMS.txt` as direct release assets.
 
 The `fix/v1.1-uhid-keyboard` branch is retained for maintenance. No workflow step
@@ -50,6 +50,10 @@ Display detection merges logical display blocks and independent `DisplayInfo`
 records, and cross-checks with the configured scrcpy executable's `--list-displays`
 output. Diagnostic logs report only numeric IDs and dimensions from these
 snapshots; raw device identifiers and complete display dumps are not logged.
+
+The existing Display settings page exposes `display.dpi` with a 120–640 DPI
+slider and numeric value. Changes use the existing automatic settings save and
+take effect when the HDMI DeX session is restarted. The default remains 320 DPI.
 
 Run the device-independent HDMI lifecycle tests with:
 

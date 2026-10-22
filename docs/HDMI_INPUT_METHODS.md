@@ -25,6 +25,14 @@ The GUI's selected resolution and existing DPI preference determine the
 simulated display. Firmware support is required; DX-Manager documents its
 virtual display method primarily against One UI 8.x.
 
+In the Display settings page, the Display DPI slider accepts 120–640 DPI and
+shows the current numeric value. Drag to adjust, or focus the slider and use
+the arrow keys for one-DPI steps. Changes auto-save in `display.dpi`; stop and
+start the HDMI DeX session to apply them. The existing default is 320 DPI.
+Lower DPI fits more content on the desktop; higher DPI makes text and controls
+larger. This control sets the simulated display's density. The previous
+Wireless DeX backend does not apply the simulated-display density setting.
+
 Android can show this simulated display as a floating preview on the phone. That
 window can appear before the PC starts streaming, and its presence does not
 prove that scrcpy has attached successfully. If activation fails, the application
