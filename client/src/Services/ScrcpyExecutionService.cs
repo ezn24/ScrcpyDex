@@ -423,6 +423,9 @@ namespace ScrcpyDex.Services
                 : "uhid";
             args.Add($"--mouse={mouseDriver}");
 
+            // Register a physical keyboard on Android instead of using SDK text injection.
+            args.Add("--keyboard=uhid");
+
             // Video Bitrate
             int bitrate = settings.Display?.Bitrate ?? 8000000;
             if (bitrate > 0)

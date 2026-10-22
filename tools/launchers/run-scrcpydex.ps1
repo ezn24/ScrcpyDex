@@ -162,11 +162,12 @@ Write-Host "  • [Closing Win] Automatically terminates DeX & saves phone batte
 Write-Host "-----------------------------------------------------" -ForegroundColor Yellow
 Write-Host ""
 
-# 5. Open single DeX window with scrcpy in UHID mode (Physical Mouse) with custom settings
+# 5. Open single DeX window with a physical UHID keyboard and the configured mouse
 try {
     $scrcpyArgs = @(
         "--display-id=$dexId",
         "--mouse=$MouseDriver",
+        "--keyboard=uhid",
         "--video-bit-rate=$Bitrate",
         "--max-fps=$Fps",
         "--video-codec=$Codec",

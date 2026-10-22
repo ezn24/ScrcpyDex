@@ -111,6 +111,7 @@ namespace ScrcpyDex
 
             Assert("Render Driver D3D11", argsJoined.Contains("--render-driver=direct3d11"));
             Assert("UHID Mouse Injection", argsJoined.Contains("--mouse=uhid"));
+            Assert("Physical UHID Keyboard", argsList.Contains("--keyboard=uhid"));
             Assert("Video Bitrate", argsJoined.Contains("--video-bit-rate=12000000"));
             Assert("Max FPS", argsJoined.Contains("--max-fps=60"));
             Assert("Max Size", argsJoined.Contains("--max-size=1920"));
