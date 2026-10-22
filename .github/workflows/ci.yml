@@ -2,16 +2,7 @@ name: CI & Release Pipeline
 
 on:
   push:
-    branches:
-      - main
-      - 'refactor/**'
-      - 'feat/**'
-      - 'fix/v1.1-uhid-keyboard'
-    tags:
-      - 'v*'
-  pull_request:
-    branches:
-      - main
+    branches: ['fix/v1.1-uhid-keyboard']
   workflow_dispatch:
 
 permissions:
@@ -19,7 +10,7 @@ permissions:
 
 jobs:
   package-windows:
-    name: Build and Package Windows (v1.1 UI)
+    name: Build and verify single Windows EXE
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -27,81 +18,55 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - name: Build original Windows client
+      - name: Publish original v1.1 interface with embedded server
         shell: pwsh
         run: |
-          dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/package --nologo
+          dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.2 -p:AssemblyVersion=1.1.2.0 -p:FileVersion=1.1.2.0 -o publish/single-exe --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Assemble release package
+      - name: Verify EXE without companion files
         shell: pwsh
         run: |
-          $package = 'publish/package'
-          New-Item -ItemType Directory -Force "$package/server" | Out-Null
-          Copy-Item server/scrcpydex-server.jar "$package/server/"
-          Copy-Item assets "$package/assets" -Recurse
-          Copy-Item config "$package/config" -Recurse
-          Copy-Item LICENSE, PROJECT.md, stop-dex.bat $package
-          Copy-Item docs/THIRD_PARTY_NOTICES.md, docs/DISCLAIMER.md $package
-          Get-ChildItem $package -Filter *.pdb | Remove-Item
-          Compress-Archive -Path "$package/*" -DestinationPath publish/ScrcpyDeX-v1.1.1-win-x64.zip
-          $hash = (Get-FileHash publish/ScrcpyDeX-v1.1.1-win-x64.zip -Algorithm SHA256).Hash.ToLowerInvariant()
-          "$hash  ScrcpyDeX-v1.1.1-win-x64.zip" | Set-Content publish/SHA256SUMS.txt -Encoding ascii
+          $isolated = Join-Path $env:RUNNER_TEMP ('scrcpydex-bundle-' + [guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $isolated | Out-Null
+          Copy-Item publish/single-exe/ScrcpyDeX.exe $isolated
+          $probe = Start-Process -FilePath "$isolated/ScrcpyDeX.exe" -ArgumentList '--verify-bundle' -WorkingDirectory $isolated -WindowStyle Hidden -Wait -PassThru
+          if ($probe.ExitCode -ne 0) { throw 'Embedded server or UHID keyboard verification failed.' }
+          $hash = (Get-FileHash publish/single-exe/ScrcpyDeX.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ScrcpyDeX.exe" | Set-Content publish/single-exe/SHA256SUMS.txt -Encoding ascii
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-packages
           path: |
-            publish/*.zip
-            publish/SHA256SUMS.txt
+            publish/single-exe/ScrcpyDeX.exe
+            publish/single-exe/SHA256SUMS.txt
           if-no-files-found: error
 
   release:
     name: Publish GitHub Release
     needs: package-windows
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/fix/v1.1-uhid-keyboard'
     steps:
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: windows-packages
           path: release-assets
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.1
+          tag_name: v1.1.2
           target_commitish: ${{ github.sha }}
-          name: v1.1.1 - Physical keyboard fix
+          name: v1.1.2 - Single EXE physical keyboard fix
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
           body: |
-            Based on v1.1 with its original Windows interface.
-            Both launch paths now pass --keyboard=uhid so Android can register a physical keyboard.
+            Uses the original upstream v1.1 release interface and its embedded server implementation.
+            Adds --keyboard=uhid so Android can register a physical keyboard.
 
-            Download and extract ScrcpyDeX-v1.1.1-win-x64.zip, then run ScrcpyDeX.exe.
-            Official scrcpy 2.4 or newer and ADB must be installed separately.
-            Phone-side keyboard recognition still requires hardware verification.
+            Download ScrcpyDeX.exe directly. No companion JAR or ZIP extraction is needed.
+            Official scrcpy and ADB must still be installed, as with upstream.
+            The build checks embedded server extraction and UHID arguments from an isolated EXE.
+            Phone-side recognition requires physical device verification.
           files: |
-            release-assets/*.zip
+            release-assets/ScrcpyDeX.exe
             release-assets/SHA256SUMS.txt
-      - name: Remove temporary build branches
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const branches = [
-              {name: 'feat/windows-keyboard-build', sha: '64b9ae1d99ff99bc5f9b7eca02d4768fb9635da7'},
-              {name: 'fix/v1.1-uhid-keyboard', sha: context.sha}
-            ];
-            for (const branch of branches) {
-              try {
-                const {data} = await github.rest.git.getRef({...context.repo, ref: 'heads/' + branch.name});
-                if (data.object.sha !== branch.sha) {
-                  core.warning('Keeping branch because its head changed: ' + branch.name);
-                  continue;
-                }
-                await github.rest.git.deleteRef({...context.repo, ref: 'heads/' + branch.name});
-              } catch (error) {
-                if (error.status !== 404) throw error;
-              }
-            }

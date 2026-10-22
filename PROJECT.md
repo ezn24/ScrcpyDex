@@ -1,52 +1,38 @@
-# ScrcpyDeX v1.1 physical keyboard fix
+# ScrcpyDeX physical keyboard fix
 
-## Scope
+## Source and requirements
 
-This branch is based on the published upstream `v1.1` tag. Unlike the newer
-Avalonia client on `main`, this release has no keyboard mode option. Both its
-compiled WPF client and PowerShell launcher omit the keyboard argument, so scrcpy
-uses SDK input: typing works without registering a physical keyboard on Android.
+This branch preserves the original upstream v1.1 release interface, using release
+commit `8edab188e0ce439a03e5a3a10deb32714a9bac61`. That release commit
+contains the embedded server deployment and UI shipped in the upstream single
+EXE; it is newer than the upstream `v1.1` tag.
 
-Both launch paths now pass `--keyboard=uhid`, matching DX-Manager's `-K` option.
-The mouse setting remains independent. The change uses scrcpy's existing UHID
-implementation and does not modify the Android server or Samsung settings.
+The keyboard fix adds `--keyboard=uhid` to the compiled client and script launcher.
+The single EXE reuses upstream's embedded server resource and extraction logic.
+Official scrcpy and ADB remain external prerequisites, as with upstream.
 
 ## Build on Windows
 
-Install the .NET 8 SDK and restore packages from NuGet.org. From the repository
-root:
+Install the .NET 8 SDK, then run from the repository root:
 
 ```powershell
-dotnet restore client/ScrcpyDex.WinUI.csproj --source https://api.nuget.org/v3/index.json
-dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/keyboard-fix
+dotnet publish client/ScrcpyDex.WinUI.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=1.1.2 -p:AssemblyVersion=1.1.2.0 -p:FileVersion=1.1.2.0 -o publish/single-exe
 ```
 
-Keep `server/scrcpydex-server.jar` next to the executable, or in a `server`
-subdirectory next to it. Install official scrcpy 2.4 or newer and ADB; the
-application searches its directory and PATH as well as supported installation
-locations. Use the existing v1.1 installation's runtime files if available.
+The distributable is `publish/single-exe/ScrcpyDeX.exe`; it embeds the server JAR.
+No companion JAR, assets directory, or configuration template is needed.
 
-## Automated release
+## Verification and release
 
-The existing `.github/workflows/ci.yml` pipeline is adapted to the v1.1 source
-layout on this branch. It builds the original WPF interface and publishes
-`v1.1.1` with a Windows ZIP and checksum after a successful build. The ZIP includes
-the server JAR, assets, configuration templates, and license notices. The temporary
-build branches are removed only after publication, provided their heads have not
-changed. The release tag preserves the source.
+The existing `.github/workflows/ci.yml` builds the single EXE, copies only that
+file to an isolated directory, and runs `--verify-bundle`. This checks the embedded
+JAR against the resolved file and verifies the UHID keyboard argument without
+opening the interface or contacting a phone. A passing build publishes `v1.1.2`
+with `ScrcpyDeX.exe` and `SHA256SUMS.txt` as direct release assets.
 
-## Verification
+The `fix/v1.1-uhid-keyboard` branch is retained for maintenance. No workflow step
+deletes branches.
 
-The existing `--self-test` entry point checks that generated arguments contain
-`--keyboard=uhid`. It also runs the project's broader internal checks.
-
-For hardware validation, close the previous session and start this build. On the
-phone, open Settings > General management > Physical keyboard and check for the
-scrcpy keyboard. Configure its layout and Android input method there. Test text,
-Shift, Ctrl, and the DeX desktop shortcuts. Physical device recognition has not
-been verified by an automated desktop build; it requires a connected phone.
-
-## References
-
-- [Upstream v1.1](https://github.com/Aureliano021/ScrcpyDex/tree/v1.1)
-- [scrcpy keyboard documentation](https://github.com/Genymobile/scrcpy/blob/master/doc/keyboard.md)
+Hardware recognition still requires a connected Samsung phone. Restart the DeX
+session, then check Settings > General management > Physical keyboard and test
+typing and keyboard shortcuts.

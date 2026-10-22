@@ -162,7 +162,7 @@ Write-Host "  • [Closing Win] Automatically terminates DeX & saves phone batte
 Write-Host "-----------------------------------------------------" -ForegroundColor Yellow
 Write-Host ""
 
-# 5. Open single DeX window with a physical UHID keyboard and the configured mouse
+# 5. Open single DeX window with scrcpy in UHID mode (Physical Mouse) with custom settings
 try {
     $scrcpyArgs = @(
         "--display-id=$dexId",

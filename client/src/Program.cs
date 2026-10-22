@@ -30,6 +30,11 @@ namespace ScrcpyDex
         [STAThread]
         public static int Main(string[] args)
         {
+            if (args != null && args.Length > 0 && args[0] == "--verify-bundle")
+            {
+                return VerifyBundle();
+            }
+
             if (args != null && args.Length > 0 && (args[0] == "--test" || args[0] == "--self-test"))
             {
                 return RunSelfTests();
@@ -49,6 +54,28 @@ namespace ScrcpyDex
                     "ScrcpyDeX — Error",
                     System.Windows.MessageBoxButton.OK,
                     System.Windows.MessageBoxImage.Error);
+                return 1;
+            }
+        }
+
+        private static int VerifyBundle()
+        {
+            try
+            {
+                using var resource = typeof(Program).Assembly.GetManifestResourceStream("scrcpydex-server.jar");
+                if (resource == null) return 1;
+                using var buffer = new MemoryStream();
+                resource.CopyTo(buffer);
+                string? jar = ScrcpyPathResolver.ResolveServerJar();
+                if (jar == null || !File.Exists(jar)) return 1;
+                string expected = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(buffer.ToArray()));
+                string actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(jar)));
+                var keyboardArgs = ScrcpyExecutionService.BuildArgumentsList(new ScrcpyDeXSettings())
+                    .FindAll(arg => arg.StartsWith("--keyboard=", StringComparison.Ordinal));
+                return expected == actual && keyboardArgs.Count == 1 && keyboardArgs[0] == "--keyboard=uhid" ? 0 : 1;
+            }
+            catch
+            {
                 return 1;
             }
         }
