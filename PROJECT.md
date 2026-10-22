@@ -26,6 +26,15 @@ subdirectory next to it. Install official scrcpy 2.4 or newer and ADB; the
 application searches its directory and PATH as well as supported installation
 locations. Use the existing v1.1 installation's runtime files if available.
 
+## Automated release
+
+The existing `.github/workflows/ci.yml` pipeline is adapted to the v1.1 source
+layout on this branch. It builds the original WPF interface and publishes
+`v1.1.1` with a Windows ZIP and checksum after a successful build. The ZIP includes
+the server JAR, assets, configuration templates, and license notices. The temporary
+build branches are removed only after publication, provided their heads have not
+changed. The release tag preserves the source.
+
 ## Verification
 
 The existing `--self-test` entry point checks that generated arguments contain
