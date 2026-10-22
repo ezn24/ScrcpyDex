@@ -28,11 +28,6 @@ locations. Use the existing v1.1 installation's runtime files if available.
 
 ## Verification
 
-The `Build v1.1 physical keyboard fix` GitHub Actions workflow builds this branch
-on push and uploads a Windows x64 artifact containing the executable, server JAR,
-license notices, and SHA-256 checksum. Official scrcpy and ADB must be installed
-separately. It can also be started manually from the Actions interface.
-
 The existing `--self-test` entry point checks that generated arguments contain
 `--keyboard=uhid`. It also runs the project's broader internal checks.
 
